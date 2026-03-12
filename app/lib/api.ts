@@ -10,9 +10,12 @@ function getToken(): string | null {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = getToken();
     const headers: Record<string, string> = {
-        "Content-Type": "application/json",
         ...(options.headers as Record<string, string>)
     };
+    // Only set JSON content type if it's not a FormData payload (e.g. for uploads)
+    if (!(options.body instanceof FormData)) {
+        headers["Content-Type"] = headers["Content-Type"] || "application/json";
+    }
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
     }
@@ -23,8 +26,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         credentials: "include"
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+        if (res.status === 401) {
+            logout();
+            if (typeof window !== "undefined") {
+                window.location.href = "/login";
+            }
+        }
         throw new Error(data.message || `API Error: ${res.status}`);
     }
     return data;
@@ -57,6 +66,22 @@ export function logout() {
     localStorage.removeItem("chat_user");
 }
 
+export async function updateProfile(data: { firstName: string, lastName: string, phone?: string }) {
+    return request<any>("/users/profile", {
+        method: "PUT",
+        body: JSON.stringify(data)
+    });
+}
+
+export async function uploadUserAvatar(file: File) {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    return request<any>("/users/avatar", {
+        method: "POST",
+        body: formData
+    });
+}
+
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
 export async function getConversations() {
@@ -76,6 +101,12 @@ export async function sendMessage(conversationId: string, body: {
     return request<any>(`/chat/conversations/${conversationId}/messages`, {
         method: "POST",
         body: JSON.stringify(body)
+    });
+}
+
+export async function recallMessage(messageId: string) {
+    return request<any>(`/chat/messages/${messageId}/recall`, {
+        method: "DELETE"
     });
 }
 
@@ -107,4 +138,40 @@ export async function markAsRead(conversationId: string) {
 
 export async function getChatUsers() {
     return request<any>("/chat/users");
+}
+
+export async function addGroupMember(conversationId: string, memberIds: string[]) {
+    return request<any>(`/chat/conversations/${conversationId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ memberIds })
+    });
+}
+
+export async function updateGroup(conversationId: string, data: { name?: string; avatar?: string; color?: string }) {
+    return request<any>(`/chat/conversations/${conversationId}/group`, {
+        method: "PUT",
+        body: JSON.stringify(data)
+    });
+}
+
+export async function updateMemberRole(conversationId: string, memberId: string, action: "promote" | "demote") {
+    return request<any>(`/chat/conversations/${conversationId}/members/${memberId}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ action })
+    });
+}
+
+export async function removeGroupMember(conversationId: string, memberId: string) {
+    return request<any>(`/chat/conversations/${conversationId}/members/${memberId}`, {
+        method: "DELETE"
+    });
+}
+
+export async function uploadChatFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request<any>("/chat/upload", {
+        method: "POST",
+        body: formData
+    });
 }

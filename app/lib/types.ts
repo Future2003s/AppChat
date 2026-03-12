@@ -19,6 +19,7 @@ export interface IConversation {
     avatar?: string;
     color?: string;
     participants: IUser[];
+    admins?: string[];
     lastMessage?: {
         senderId: IUser | string;
         text?: string;
@@ -49,6 +50,7 @@ export interface IMessage {
         fileName?: string;
     };
     readBy: string[];
+    recalled?: boolean;
     createdAt: string;
     updatedAt: string;
 }
