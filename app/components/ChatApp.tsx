@@ -101,8 +101,8 @@ export default function ChatApp() {
     handleRecall
   } = useChat(me);
 
-  // Switch to chat panel on mobile when conversation selected
-  useEffect(() => { if (isMobile && activeId) setMobilePanel("chat"); }, [activeId, isMobile]);
+  // Switch to chat panel on mobile when conversation selected; back to list when deselected
+  useEffect(() => { if (isMobile) setMobilePanel(activeId ? "chat" : "list"); }, [activeId, isMobile]);
 
   if (authLoading && !me) return <LoadingSkeleton />;
   if (!me) return null;

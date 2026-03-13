@@ -231,11 +231,11 @@ export function useChat(me: IUser | null) {
       setConvs(prev => prev.filter(c => c._id !== convId));
       setActiveIdRaw(prev => {
         if (prev !== convId) return prev;
-        return convs.find(c => c._id !== convId)?._id ?? null;
+        return null; // Reset to empty state, don't auto-navigate to another conversation
       });
     });
     setMsgs(prev => { const n = { ...prev }; delete n[convId]; return n; });
-  }, [convs]);
+  }, []);
 
   // ─── Start chat from contacts ────────────────────────────────────────────
   const handleStartChat = useCallback((conv: IConversation) => {
