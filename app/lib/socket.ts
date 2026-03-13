@@ -1,8 +1,7 @@
 // Socket.IO client for real-time chat
-
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://localhost:8081";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:8081";
 
 let socket: Socket | null = null;
 

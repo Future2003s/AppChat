@@ -19,17 +19,42 @@ function displayName(u: IUser) {
   return u?.fullName || [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.email || "?";
 }
 
-export function useChat(me: IUser | null) {
-  const [convs, setConvs] = useState<IConversation[]>([]);
+export function useChat(me: IUser | null, onNewMsg?: (info: { name: string; text: string; avatar: string; color: string; convId: string }) => void) {
+  const myId = me ? (me._id || (me as any).id) : null;
+  const cacheKey = myId ? `chat_convs_${myId}` : null;
+
+  // Init convs from cache so conversation list renders instantly on refresh
+  const [convs, setConvs] = useState<IConversation[]>(() => {
+    if (typeof window === "undefined" || !myId) return [];
+    const key = `chat_convs_${myId}`;
+    try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
+  });
   const [msgs, setMsgs] = useState<Record<string, IMessage[]>>({});
   const [activeId, setActiveIdRaw] = useState<string | null>(null);
-  const [chatUsers, setChatUsers] = useState<IUser[]>([]);
+  const [chatUsers, setChatUsers] = useState<IUser[]>(() => {
+    if (typeof window === "undefined" || !myId) return [];
+    try { return JSON.parse(localStorage.getItem(`chat_users_${myId}`) || "[]"); } catch { return []; }
+  });
   const [isLoadingMsgs, setIsLoadingMsgs] = useState(false);
-  const prevActiveId = useRef<string | null>(null);
+  const activeIdRef = useRef<string | null>(null);
   const [, startTransition] = useTransition();
 
-  const myId = me ? (me._id || (me as any).id) : null;
+  // Persist convs to localStorage whenever they change
+  useEffect(() => {
+    if (cacheKey && convs.length > 0) {
+      try { localStorage.setItem(cacheKey, JSON.stringify(convs)); } catch {}
+    }
+  }, [convs, cacheKey]);
+
+  // Persist chatUsers
+  useEffect(() => {
+    if (myId && chatUsers.length > 0) {
+      try { localStorage.setItem(`chat_users_${myId}`, JSON.stringify(chatUsers)); } catch {}
+    }
+  }, [chatUsers, myId]);
+
   const token = typeof window !== "undefined" ? localStorage.getItem("chat_token") : null;
+
 
   // ─── Socket handlers (stable via ref in useSocket) ──────────────────────
   useSocket(token, {
@@ -52,20 +77,50 @@ export function useChat(me: IUser | null) {
 
       startTransition(() => {
         setConvs(prev => {
-          const targetConv = prev.find(c => c._id === conversationId);
-          if (targetConv) {
+          // Move updated conversation to top
+          const targetIndex = prev.findIndex(c => c._id === conversationId);
+          if (targetIndex > -1) {
+            const targetConv = prev[targetIndex];
             let title = targetConv.type === "group" ? (targetConv.name || "Nhóm") : "Tin nhắn mới";
+            let avatarLetters = "?";
+            let color = "#2563eb";
             if (targetConv.type !== "group" && targetConv.participants) {
               const sender = targetConv.participants.find(p => (p._id || (p as any).id) === senderId);
-              if (sender) title = displayName(sender);
+              if (sender) {
+                title = displayName(sender);
+                const f = (sender.firstName || "").charAt(0).toUpperCase();
+                const l = (sender.lastName || "").charAt(0).toUpperCase();
+                avatarLetters = (f + l) || "?";
+              }
+            } else if (targetConv.type === "group") {
+              avatarLetters = (targetConv.name || "GR").substring(0, 2).toUpperCase();
+              color = targetConv.color || "#2563eb";
             }
             notify(title, message.text || "Đã gửi tệp đính kèm");
+            
+            // Fire in-app toast only if this isn't the active conversation
+            if (activeIdRef.current !== conversationId && onNewMsg) {
+              onNewMsg({ name: title, text: message.text || "📎 Tệp đính kèm", avatar: avatarLetters, color, convId: conversationId });
+            }
+            
+            const isCurrentlyActive = activeIdRef.current === conversationId;
+            const updatedConv = {
+               ...targetConv,
+               unreadCount: isCurrentlyActive ? 0 : ((targetConv.unreadCount || 0) + 1),
+               lastMessage: { senderId: message.senderId as string, text: message.text || "📎", time: message.createdAt },
+               updatedAt: message.createdAt
+            };
+            
+            // If it's active, mark as read on backend (optional) since we are already reading it.
+            if (isCurrentlyActive) {
+                api.markAsRead(conversationId).catch(() => {});
+            }
+            const newConvs = [...prev];
+            newConvs.splice(targetIndex, 1);
+            newConvs.unshift(updatedConv);
+            return newConvs;
           }
-          return prev.map(c =>
-            c._id === conversationId
-              ? { ...c, unreadCount: (c.unreadCount || 0) + 1, lastMessage: { senderId: message.senderId as string, text: message.text || "📎", time: message.createdAt } }
-              : c
-          );
+          return prev;
         });
       });
       setMsgs(prev => {
@@ -73,7 +128,7 @@ export function useChat(me: IUser | null) {
         if (existing.some(m => m._id === message._id)) return prev;
         return { ...prev, [conversationId]: [...existing, message] };
       });
-    }, [myId]),
+    }, [myId, onNewMsg]),
 
     onNewConversation: useCallback((conv: IConversation) => {
       startTransition(() => {
@@ -102,7 +157,10 @@ export function useChat(me: IUser | null) {
       startTransition(() => {
         setConvs(prev => prev.filter(c => c._id !== conversationId));
         setActiveIdRaw(prev => {
-          if (prev === conversationId) return null;
+          if (prev === conversationId) {
+             activeIdRef.current = null;
+             return null;
+          }
           return prev;
         });
       });
@@ -140,17 +198,14 @@ export function useChat(me: IUser | null) {
 
   // ─── Conversation change: join room, mark read, load messages ────────────
   const setActiveId = useCallback((id: string | null) => {
+    activeIdRef.current = id;
     startTransition(() => setActiveIdRaw(id));
   }, []);
 
   useEffect(() => {
     if (!activeId || !me) return;
 
-    if (prevActiveId.current && prevActiveId.current !== activeId) {
-      leaveConversation(prevActiveId.current);
-    }
     joinConversation(activeId);
-    prevActiveId.current = activeId;
 
     // Optimistic: mark as read in UI immediately
     startTransition(() => {
@@ -170,6 +225,10 @@ export function useChat(me: IUser | null) {
         .catch(console.error)
         .finally(() => setIsLoadingMsgs(false));
     }
+
+    return () => {
+      leaveConversation(activeId);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, me]);
 
@@ -231,6 +290,7 @@ export function useChat(me: IUser | null) {
       setConvs(prev => prev.filter(c => c._id !== convId));
       setActiveIdRaw(prev => {
         if (prev !== convId) return prev;
+        activeIdRef.current = null;
         return null; // Reset to empty state, don't auto-navigate to another conversation
       });
     });

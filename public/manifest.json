@@ -1,6 +1,6 @@
 {
   "name": "CHAT NỘI BỘ",
-  "short_name": "ChatLocal",
+  "short_name": "Chat Nội Bộ",
   "description": "Chat nội bộ công ty",
   "start_url": "/",
   "display": "standalone",

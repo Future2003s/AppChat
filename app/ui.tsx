@@ -4,71 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import * as api from "./lib/api";
 
 
-export const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Be Vietnam Pro', sans-serif; background: #f1f5f9; }
-  input::placeholder, textarea::placeholder { color: #94a3b8; }
-  [contenteditable][data-placeholder]:empty::before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; }
-
-  /* Animations */
-  @keyframes msgIn { from { opacity:0; transform:translateY(8px) scale(0.96); } to { opacity:1; transform:none; } }
-  .msg-in { animation: msgIn 0.2s cubic-bezier(0.34,1.56,0.64,1); }
-  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-  .fade-in { animation: fadeIn 0.25s ease; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes slideUp { from { transform:translateY(100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
-  @keyframes slideRight { from { transform:translateX(-100%); } to { transform:translateX(0); } }
-  @keyframes slideLeft { from { transform:translateX(100%); } to { transform:translateX(0); } }
-  .slide-up { animation: slideUp 0.3s cubic-bezier(0.34,1.2,0.64,1); }
-  .slide-right { animation: slideRight 0.25s cubic-bezier(0.34,1.1,0.64,1); }
-  .slide-left { animation: slideLeft 0.3s cubic-bezier(0.34,1.1,0.64,1); }
-
-  /* Skeleton pulse */
-  @keyframes skPulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
-  .sk { animation: skPulse 1.6s ease-in-out infinite; background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; border-radius: 6px; }
-  @keyframes skShimmer { from{background-position:200% 0} to{background-position:-200% 0} }
-  .sk-shimmer { animation: skShimmer 2s linear infinite; background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%); background-size: 200% 100%; border-radius: 6px; }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-  /* Responsive */
-  .hide-on-mobile { display: none !important; }
-  .show-on-mobile { display: flex !important; }
-  @media (min-width: 768px) {
-    .hide-on-desktop { display: none !important; }
-    .show-on-desktop { display: flex !important; }
-    .hide-on-mobile { display: flex !important; }
-    .show-on-mobile { display: none !important; }
-  }
-
-  /* Button reset */
-  button { font-family: 'Be Vietnam Pro', sans-serif; }
-
-
-  /* Input focus ring */
-  .msg-input:focus { outline: none; }
-
-  /* Date separator */
-  .date-sep { display: flex; align-items: center; gap: 10px; margin: 14px 0 8px; }
-  .date-sep::before, .date-sep::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
-  .date-sep span { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; padding: 0 2px; }
-
-  /* Conversation item hover */
-  .conv-item { transition: background 0.12s, border-left-color 0.12s; }
-  .conv-item:hover { background: #f8fafc !important; }
-
-  /* Typing indicator */
-  @keyframes typingDot { 0%,80%,100%{transform:scale(0.6); opacity:0.4} 40%{transform:scale(1); opacity:1} }
-  .typing-dot:nth-child(1){animation:typingDot 1.2s 0s infinite;}
-  .typing-dot:nth-child(2){animation:typingDot 1.2s 0.2s infinite;}
-  .typing-dot:nth-child(3){animation:typingDot 1.2s 0.4s infinite;}
-`;
-
 export const Z = {
   blue: "#2563eb", blueDark: "#1d4ed8", blueLight: "#eff6ff", blueMid: "#dbeafe",
   sidebar: "#ffffff", leftPanel: "#f8fafc", bg: "#f1f5f9", surface: "#ffffff",
@@ -121,6 +56,40 @@ const fIcon = (name = "") => {
 };
 const fSize = (b) => b < 1024 ? b + "B" : b < 1048576 ? (b / 1024).toFixed(1) + "KB" : (b / 1048576).toFixed(1) + "MB";
 
+// Hook for dynamic viewport height (fixes iOS keyboard layout)
+export function useViewportHeight() {
+  const [vh, setVh] = useState(typeof window !== "undefined" ? window.innerHeight : 0);
+  const [vvh, setVvh] = useState(typeof window !== "undefined" && window.visualViewport ? window.visualViewport.height : 0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    const update = () => {
+      setVh(window.innerHeight);
+      if (window.visualViewport) setVvh(window.visualViewport.height);
+    };
+    
+    update();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", update);
+      window.visualViewport.addEventListener("scroll", update);
+    } else {
+      window.addEventListener("resize", update);
+    }
+    
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", update);
+        window.visualViewport.removeEventListener("scroll", update);
+      } else {
+        window.removeEventListener("resize", update);
+      }
+    };
+  }, []);
+
+  return { vh, vvh, isKeyboardOpen: vvh > 0 && vvh < vh };
+}
+
 // Avatar
 export function Av({ user, size = 40, isGroup = false, dot = false, gAvatar, groupColor, onlineStatus }) {
   // Check if avatar is a URL (image uploaded)
@@ -146,65 +115,109 @@ export function Av({ user, size = 40, isGroup = false, dot = false, gAvatar, gro
 }
 
 // Icon Nav — Desktop sidebar + Mobile bottom tab (never both at once)
-export function IconNav({ tab, setTab, me, isMobile, hideOnMobile }) {
+export function IconNav({ tab, setTab, me, isMobile, hideOnMobile, unreadCount = 0 }) {
+  const [showLogout, setShowLogout] = useState(false);
+  const doLogout = () => { api.logout(); window.location.replace("/login"); };
   const nav = [
-    { id: "chat", lbl: "Tin nhắn",
-      d: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /> },
-    { id: "contacts", lbl: "Danh bạ",
-      d: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></> },
-    { id: "account", lbl: "Tài khoản",
-      d: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></> },
+    {
+      id: "chat", lbl: "Tin nhắn",
+      d: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    },
+    {
+      id: "contacts", lbl: "Danh bạ",
+      d: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>
+    },
+    {
+      id: "account", lbl: "Tài khoản",
+      d: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>
+    },
   ];
+
+  // Badge helper
+  const Badge = ({ borderColor }: { borderColor: string }) =>
+    unreadCount > 0 ? (
+      <span style={{
+        position: "absolute", top: -3, right: -3,
+        minWidth: 16, height: 16, borderRadius: 8,
+        background: "#ef4444", color: "white",
+        fontSize: 9, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "0 4px", border: `1.5px solid ${borderColor}`,
+        lineHeight: 1, pointerEvents: "none",
+      }}>{unreadCount > 99 ? "99+" : unreadCount}</span>
+    ) : null;
 
   // ── Mobile bottom tab bar ──────────────────────────────────────
   if (isMobile) {
     return (
-      <div className={hideOnMobile ? "hide-on-mobile" : ""} style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 900,
-        background: "rgba(30,41,59,0.95)", backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "space-around",
-        padding: "8px 0", paddingBottom: "max(8px, env(safe-area-inset-bottom))",
-        borderTop: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 -8px 32px rgba(0,0,0,0.25)",
-      }}>
-        {nav.map(n => (
-          <button key={n.id} onClick={() => setTab(n.id)} style={{
-            flex: 1, height: 50, border: "none", cursor: "pointer",
-            background: "transparent",
+      <>
+        <div className={hideOnMobile ? "hide-on-mobile" : ""} style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 900,
+          background: "rgba(30,41,59,0.95)", backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          display: "flex", alignItems: "center", justifyContent: "space-around",
+          padding: "8px 0", paddingBottom: "max(12px, env(safe-area-inset-bottom, 22px))",
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 -8px 32px rgba(0,0,0,0.25)",
+        }}>
+          {nav.map(n => (
+            <button key={n.id} onClick={() => setTab(n.id)} style={{
+              flex: 1, height: 50, border: "none", cursor: "pointer",
+              background: "transparent",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+            }}>
+              <div style={{
+                position: "relative",
+                width: 40, height: 28, borderRadius: 14,
+                background: tab === n.id ? "rgba(37,99,235,0.35)" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.2s",
+              }}>
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="none"
+                  stroke={tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.45)"}
+                  strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transition: "stroke 0.2s" }}>{n.d}
+                </svg>
+                {n.id === "chat" && <Badge borderColor="rgba(30,41,59,0.95)" />}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: tab === n.id ? 700 : 500,
+                color: tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.4)",
+                transition: "color 0.2s"
+              }}>{n.lbl}</span>
+            </button>
+          ))}
+          <button onClick={() => setShowLogout(true)} style={{
+            flex: 1, height: 50, border: "none", cursor: "pointer", background: "transparent",
             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
           }}>
-            <div style={{
-              width: 40, height: 28, borderRadius: 14,
-              background: tab === n.id ? "rgba(37,99,235,0.35)" : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 0.2s",
-            }}>
-              <svg width={20} height={20} viewBox="0 0 24 24" fill="none"
-                stroke={tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.45)"}
-                strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-                style={{ transition: "stroke 0.2s" }}>{n.d}
+            <div style={{ width: 40, height: 28, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={2} strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
               </svg>
             </div>
-            <span style={{
-              fontSize: 10, fontWeight: tab === n.id ? 700 : 500,
-              color: tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.4)",
-              transition: "color 0.2s"
-            }}>{n.lbl}</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>Thoát</span>
           </button>
-        ))}
-        <button onClick={() => { api.logout(); window.location.replace("/login"); }} style={{
-          flex: 1, height: 50, border: "none", cursor: "pointer", background: "transparent",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-        }}>
-          <div style={{ width: 40, height: 28, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={2} strokeLinecap="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+        </div>
+        {showLogout && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowLogout(false)}>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(8,28,54,0.45)", backdropFilter: "blur(3px)" }} />
+            <div onClick={e => e.stopPropagation()} className="fade-in" style={{ position: "relative", background: "white", borderRadius: 18, padding: "28px 28px 22px", width: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff7ed", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+                <svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#081c36", marginBottom: 8 }}>Đăng xuất?</div>
+              <div style={{ fontSize: 13.5, color: "#7a8694", lineHeight: 1.6, marginBottom: 22 }}>Bạn có chắc muốn đăng xuất khỏi tài khoản không?</div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setShowLogout(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: `1.5px solid #e2e8f0`, background: "transparent", fontSize: 14, fontWeight: 600, color: "#64748b", cursor: "pointer" }}>Huỷ</button>
+                <button onClick={doLogout} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "none", background: "#f59e0b", fontSize: 14, fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>Đăng xuất</button>
+              </div>
+            </div>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>Thoát</span>
-        </button>
-      </div>
+        )}
+      </>
     );
   }
 
@@ -240,11 +253,14 @@ export function IconNav({ tab, setTab, me, isMobile, hideOnMobile }) {
               width: 3, borderRadius: "0 3px 3px 0", background: "#60a5fa",
             }} />
           )}
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none"
-            stroke={tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.5)"}
-            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-            style={{ transition: "stroke 0.15s" }}>{n.d}
-          </svg>
+          <div style={{ position: "relative" }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none"
+              stroke={tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.5)"}
+              strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+              style={{ transition: "stroke 0.15s", display: "block" }}>{n.d}
+            </svg>
+            {n.id === "chat" && <Badge borderColor={Z.navBg} />}
+          </div>
           <span style={{ fontSize: 9, color: tab === n.id ? "#93c5fd" : "rgba(255,255,255,0.4)", fontWeight: 600, transition: "color 0.15s" }}>{n.lbl}</span>
         </button>
       ))}
@@ -252,17 +268,37 @@ export function IconNav({ tab, setTab, me, isMobile, hideOnMobile }) {
       <div style={{ flex: 1 }} />
 
       {/* Logout */}
-      <button onClick={() => { api.logout(); window.location.replace("/login"); }}
+      <button onClick={() => setShowLogout(true)}
         className="nav-btn"
-        style={{ width: 40, height: 40, borderRadius: "50%", border: "none",
+        style={{
+          width: 40, height: 40, borderRadius: "50%", border: "none",
           background: "rgba(255,255,255,0.07)", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8,
         }}
         onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.2)"}
         onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.07)"}
       >
-        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={2} strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={2} strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
       </button>
+
+      {showLogout && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowLogout(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(8,28,54,0.45)", backdropFilter: "blur(3px)" }} />
+          <div onClick={e => e.stopPropagation()} className="fade-in" style={{ position: "relative", background: "white", borderRadius: 18, padding: "28px 28px 22px", width: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#fff7ed", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+              <svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth={2} strokeLinecap="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#081c36", marginBottom: 8 }}>Đăng xuất?</div>
+            <div style={{ fontSize: 13.5, color: "#7a8694", lineHeight: 1.6, marginBottom: 22 }}>Bạn có chắc muốn đăng xuất khỏi tài khoản không?</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowLogout(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: `1.5px solid #e2e8f0`, background: "transparent", fontSize: 14, fontWeight: 600, color: "#64748b", cursor: "pointer" }}>Huỷ</button>
+              <button onClick={doLogout} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "none", background: "#f59e0b", fontSize: 14, fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>Đăng xuất</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,6 +323,41 @@ export function DeleteDialog({ name, onConfirm, onCancel }) {
           <button onClick={onConfirm} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "none", background: "#ef4444", fontSize: 14, fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 4px 14px rgba(239,68,68,0.35)" }}>Xoá</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// In-app Toast Notification
+export function ChatToast({ toast, onClick }: { toast: { name: string; text: string; avatar?: string; color?: string } | null; onClick: () => void }) {
+  if (!toast) return null;
+  return (
+    <div
+      className="slide-up"
+      onClick={onClick}
+      style={{
+        position: "fixed", top: 16, right: 16, zIndex: 3000,
+        background: "white", borderRadius: 14, padding: "12px 16px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1)",
+        border: `1px solid ${Z.border}`,
+        display: "flex", alignItems: "center", gap: 12,
+        cursor: "pointer", maxWidth: 320, minWidth: 240,
+        transition: "box-shadow 0.15s",
+      }}
+      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 40px rgba(0,0,0,0.22)"}
+      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1)"}
+    >
+      {/* Avatar circle */}
+      <div style={{
+        width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+        background: `linear-gradient(135deg,${toast.color || Z.blue}ee,${toast.color || Z.blue}88)`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 15, fontWeight: 700, color: "white",
+      }}>{toast.avatar || "?"}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: Z.text, marginBottom: 2 }}>{toast.name}</div>
+        <div style={{ fontSize: 12, color: Z.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toast.text}</div>
+      </div>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563eb", flexShrink: 0 }} />
     </div>
   );
 }
@@ -336,9 +407,9 @@ export function ConvList({ convs, activeId, setActiveId, me, onDelete, isMobile 
   return (
     <>
       {deleteConv && <DeleteDialog name={getConvName(deleteConv)} onConfirm={doDelete} onCancel={() => setDeleteConv(null)} />}
-      <div style={{ width: isMobile ? "100%" : 300, background: Z.sidebar, borderRight: `1px solid ${Z.border}`, display: "flex", flexDirection: "column", flexShrink: 0, paddingBottom: isMobile ? 66 : 0 }}>
+      <div style={{ width: isMobile ? "100%" : 300, background: Z.sidebar, borderRight: `1px solid ${Z.border}`, display: "flex", flexDirection: "column", flexShrink: 0, paddingBottom: isMobile ? 66 : 0, paddingTop: isMobile ? "env(safe-area-inset-top, 0px)" : 0 }}>
         {/* Header */}
-        <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${Z.border}` }}>
+        <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${Z.border}`, minHeight: 60 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: Z.text, letterSpacing: "-0.3px" }}>Tin nhắn</span>
@@ -361,12 +432,12 @@ export function ConvList({ convs, activeId, setActiveId, me, onDelete, isMobile 
             onFocusCapture={e => e.currentTarget.style.borderColor = Z.blue}
             onBlurCapture={e => e.currentTarget.style.borderColor = Z.border}
           >
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..."
               style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 13, color: Z.text }} />
             {search && (
               <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: Z.sub, display: "flex" }}>
-                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             )}
           </div>
@@ -392,71 +463,80 @@ export function ConvList({ convs, activeId, setActiveId, me, onDelete, isMobile 
             const otherUser = getOtherUser(conv);
             return (
               <SwipeRow key={conv._id} isMobile={isMobile} onDelete={() => setDeleteConv(conv)}>
-              <div
-                className="conv-item"
-                onClick={() => { if (isMobile) { /* handled by SwipeRow reset */ } setActiveId(conv._id); }}
-                onMouseEnter={() => setHoverId(conv._id)}
-                onMouseLeave={() => setHoverId(null)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 11, padding: "9px 14px",
-                  cursor: "pointer", position: "relative",
-                  background: act ? Z.blueLight : undefined,
-                  borderLeft: `3px solid ${act ? Z.blue : "transparent"}`,
-                }}
-              >
-                {conv.type === "direct"
-                  ? <Av user={otherUser} size={46} dot onlineStatus={otherUser?.status} />
-                  : <Av isGroup gAvatar={getConvAvatar(conv)} groupColor={getConvColor(conv)} size={46} />
-                }
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                    <span style={{
-                      fontSize: 13.5, fontWeight: hasUnread ? 700 : 600,
-                      color: Z.text, overflow: "hidden", textOverflow: "ellipsis",
-                      whiteSpace: "nowrap", maxWidth: isMobile ? 180 : 150, flex: 1,
-                    }}>{name}</span>
-                    <span style={{
-                      fontSize: 11, flexShrink: 0, marginLeft: 6,
-                      color: hasUnread ? Z.blue : Z.sub,
-                      fontWeight: hasUnread ? 700 : 400,
-                    }}>{lastTime}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{
-                      fontSize: 12, color: hasUnread ? Z.textMd : Z.sub,
-                      fontWeight: hasUnread ? 500 : 400,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 175,
-                    }}>{lastText || "Bắt đầu cuộc trò chuyện"}</span>
-                    {hasUnread && (
-                      <span style={{
-                        minWidth: 18, height: 18, borderRadius: 9,
-                        background: Z.blue, color: "white",
-                        fontSize: 10, fontWeight: 700, display: "flex",
-                        alignItems: "center", justifyContent: "center",
-                        padding: "0 5px", flexShrink: 0, marginLeft: 6,
-                      }}>{conv.unreadCount}</span>
-                    )}
-                  </div>
-                </div>
-                {/* Delete on hover — desktop only */}
-                <button
-                  onClick={e => { e.stopPropagation(); setDeleteConv(conv); }}
-                  title="Xoá cuộc trò chuyện"
+                <div
+                  className="conv-item"
+                  onClick={(e) => { 
+                    /* Prevent firing if it was a swipe */
+                    if (isMobile) {
+                      const tgt = e.currentTarget.closest('.swiper-container');
+                      if (tgt && tgt.getAttribute('data-swiping') === 'true') return;
+                    }
+                    setActiveId(conv._id); 
+                  }}
+                  onMouseEnter={() => setHoverId(conv._id)}
+                  onMouseLeave={() => setHoverId(null)}
                   style={{
-                    position: "absolute", right: 10,
-                    width: 28, height: 28, borderRadius: "50%", border: "none",
-                    background: "#fee2e2", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    opacity: hov ? 1 : 0,
-                    transition: "opacity 0.15s",
-                    pointerEvents: hov ? "auto" : "none",
+                    display: "flex", alignItems: "center", gap: 11, padding: "9px 14px",
+                    cursor: "pointer", position: "relative",
+                    background: act ? Z.blueLight : undefined,
+                    borderLeft: `3px solid ${act ? Z.blue : "transparent"}`,
                   }}
                 >
-                  <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
-                  </svg>
-                </button>
-              </div>
+                  {conv.type === "direct"
+                    ? <Av user={otherUser} size={46} dot onlineStatus={otherUser?.status} />
+                    : <Av isGroup gAvatar={getConvAvatar(conv)} groupColor={getConvColor(conv)} size={46} />
+                  }
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                      <span style={{
+                        fontSize: 13.5, fontWeight: hasUnread ? 700 : 600,
+                        color: Z.text, overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: "nowrap", maxWidth: isMobile ? 180 : 150, flex: 1,
+                      }}>{name}</span>
+                      <span style={{
+                        fontSize: 11, flexShrink: 0, marginLeft: 6,
+                        color: hasUnread ? Z.blue : Z.sub,
+                        fontWeight: hasUnread ? 700 : 400,
+                      }}>{lastTime}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{
+                        fontSize: 12, color: hasUnread ? Z.textMd : Z.sub,
+                        fontWeight: hasUnread ? 500 : 400,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 175,
+                      }}>{lastText || "Bắt đầu cuộc trò chuyện"}</span>
+                      {hasUnread && (
+                        <span style={{
+                          minWidth: 18, height: 18, borderRadius: 9,
+                          background: Z.blue, color: "white",
+                          fontSize: 10, fontWeight: 700, display: "flex",
+                          alignItems: "center", justifyContent: "center",
+                          padding: "0 5px", flexShrink: 0, marginLeft: 6,
+                        }}>{conv.unreadCount}</span>
+                      )}
+                    </div>
+                  </div>
+                  {/* Delete on hover — desktop only, hidden on mobile */}
+                  {!isMobile && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setDeleteConv(conv); }}
+                      title="Xoá cuộc trò chuyện"
+                      style={{
+                        position: "absolute", right: 10,
+                        width: 28, height: 28, borderRadius: "50%", border: "none",
+                        background: "#fee2e2", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        opacity: hov ? 1 : 0,
+                        transition: "opacity 0.15s",
+                        pointerEvents: hov ? "auto" : "none",
+                      }}
+                    >
+                      <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </SwipeRow>
             );
           })}
@@ -466,41 +546,70 @@ export function ConvList({ convs, activeId, setActiveId, me, onDelete, isMobile 
   );
 }
 
+
 // Swipe-to-delete row (mobile only)
 export function SwipeRow({ onDelete, isMobile, children }: { onDelete: () => void; isMobile: boolean; children: React.ReactNode }) {
   const [offset, setOffset] = useState(0);
   const startX = useRef(0);
+  const startY = useRef(0);
   const isDragging = useRef(false);
+  const containerRef = useRef(null);
   const THRESHOLD = 70;
 
   if (!isMobile) return <>{children}</>;
 
   const onTouchStart = (e) => {
     startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
     isDragging.current = true;
+    if (containerRef.current) containerRef.current.setAttribute('data-swiping', 'false');
   };
   const onTouchMove = (e) => {
     if (!isDragging.current) return;
     const dx = e.touches[0].clientX - startX.current;
-    if (dx < 0) setOffset(Math.max(dx, -THRESHOLD - 20));
+    const dy = Math.abs(e.touches[0].clientY - startY.current);
+    
+    // If vertical scrolling dominates, cancel swipe
+    if (dy > Math.abs(dx) && Math.abs(dx) < 10) {
+      isDragging.current = false;
+      return;
+    }
+
+    if (Math.abs(dx) > 5 && containerRef.current) {
+      containerRef.current.setAttribute('data-swiping', 'true'); // Flag to prevent click
+    }
+
+    if (dx < 0) {
+      // Swipe left to show delete
+      setOffset(Math.max(dx, -THRESHOLD - 20));
+    } else if (dx > 0 && offset < 0) {
+      // Swipe right to close
+      setOffset(Math.min(0, offset + dx));
+    }
   };
   const onTouchEnd = () => {
     isDragging.current = false;
-    if (offset < -THRESHOLD) setOffset(-THRESHOLD);
-    else setOffset(0);
+    if (offset < -THRESHOLD / 2) setOffset(-THRESHOLD);
+    else {
+      setOffset(0);
+      // Reset the swiping flag after a short delay so click event can be bypassed
+      setTimeout(() => {
+        if (containerRef.current) containerRef.current.setAttribute('data-swiping', 'false');
+      }, 50);
+    }
   };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden" }}>
+    <div className="swiper-container" ref={containerRef} style={{ position: "relative", overflow: "hidden" }}>
       {/* Red delete layer behind */}
       <div style={{
         position: "absolute", right: 0, top: 0, bottom: 0,
         width: THRESHOLD, background: "#ef4444",
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: "pointer",
-      }} onClick={onDelete}>
+      }} onClick={(e) => { e.stopPropagation(); setOffset(0); onDelete(); }}>
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+          <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" />
         </svg>
       </div>
       {/* Swipeable content */}
@@ -508,7 +617,7 @@ export function SwipeRow({ onDelete, isMobile, children }: { onDelete: () => voi
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onClick={() => { if (offset < -10) { setOffset(0); return; } }}
+        onTouchCancel={onTouchEnd}
         style={{
           transform: `translateX(${offset}px)`,
           transition: isDragging.current ? "none" : "transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94)",
@@ -523,6 +632,7 @@ export function SwipeRow({ onDelete, isMobile, children }: { onDelete: () => voi
 }
 
 export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTablet, mobilePanel, setMobilePanel, isLoadingMsgs }) {
+  const { isKeyboardOpen } = useViewportHeight();
   const [showEmoji, setShowEmoji] = useState(false);
   const [hasText, setHasText] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
@@ -530,20 +640,49 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
   const [contextMenu, setContextMenu] = useState(null); // { msgId, x, y, msg }
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef();
-  const btm = useRef();
+  const scrollRef = useRef();   // ref on the messages scroll container
+  const prevConvId = useRef(null);
   const edRef = useRef();
 
-  useEffect(() => { btm.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, conv?._id]);
+  const pendingScrollBottom = useRef(false); // true while waiting for msgs to load after conv switch
+
+  // Scroll logic: instant on conv change (even after async load), smooth only when already near bottom
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const convId = conv?._id;
+    const convChanged = prevConvId.current !== convId;
+    prevConvId.current = convId;
+
+    if (convChanged) {
+      // Mark that we want to scroll to bottom when msgs arrive
+      pendingScrollBottom.current = true;
+      // If msgs already cached, scroll now
+      if (msgs.length > 0) {
+        pendingScrollBottom.current = false;
+        el.scrollTop = el.scrollHeight;
+      }
+    } else if (pendingScrollBottom.current && msgs.length > 0) {
+      // Msgs just finished loading after conv switch → instant scroll
+      pendingScrollBottom.current = false;
+      el.scrollTop = el.scrollHeight;
+    } else {
+      // New message in same conversation → only smooth-scroll if user is near bottom
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distFromBottom < 120) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      }
+    }
+  }, [msgs, conv?._id]);
+
   useEffect(() => { if (replyTo) setTimeout(() => edRef.current?.focus(), 50); }, [replyTo]);
 
-  // Close context menu on outside click
+  // Close context menu on outside click (use 'click' not 'mousedown' so menu item onClick fires first)
   useEffect(() => {
     if (!contextMenu) return;
-    const close = (e) => {
-      setContextMenu(null);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    const close = () => setContextMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
   }, [contextMenu]);
 
   if (!conv) return (
@@ -598,15 +737,15 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     // Clear input
     e.target.value = '';
-    
+
     if (file.size > 20 * 1024 * 1024) {
       alert("Kích thước tệp tin không được vượt quá 20MB.");
       return;
     }
-    
+
     setIsUploading(true);
     try {
       const res = await api.uploadChatFile(file);
@@ -658,7 +797,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
     const nextSid = i < msgs.length - 1 ? (typeof msgs[i + 1].senderId === "object" ? (msgs[i + 1].senderId._id || msgs[i + 1].senderId.id) : msgs[i + 1].senderId) : null;
     // Date grouping
     const msgDate = msg.createdAt ? new Date(msg.createdAt).toDateString() : "";
-    const prevDate = (i > 0 && msgs[i-1].createdAt) ? new Date(msgs[i-1].createdAt).toDateString() : "";
+    const prevDate = (i > 0 && msgs[i - 1].createdAt) ? new Date(msgs[i - 1].createdAt).toDateString() : "";
     const showDateSep = i === 0 || msgDate !== prevDate;
     return { ...msg, first: i === 0 || prevSid !== sid, last: i === msgs.length - 1 || nextSid !== sid, showDateSep };
   });
@@ -711,16 +850,16 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: Z.bg }}>
       {/* Header */}
       <div style={{
-        padding: "0 16px", height: 60,
+        padding: "0 16px", minHeight: 60,
         background: Z.surface, borderBottom: `1px solid ${Z.border}`,
         display: "flex", alignItems: "center", gap: 12,
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-        paddingTop: isMobile ? "env(safe-area-inset-top)" : 0,
+        paddingTop: isMobile ? "env(safe-area-inset-top, 0px)" : 0,
         flexShrink: 0,
       }}>
         {isMobile && (
           <button onClick={() => setMobilePanel("list")} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: "4px 8px 4px 0", marginLeft: -8, color: Z.blue }}>
-            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
         )}
         {conv.type === "direct"
@@ -738,13 +877,13 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
             borderRadius: 10, cursor: "pointer", color: Z.sub, padding: "6px 8px",
             display: "flex", alignItems: "center"
           }}>
-            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
           </button>
         )}
       </div>
 
       {/* Messages */}
-      <div style={{ flex: 1, overflow: "auto", padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 0 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: "12px 16px 16px", display: "flex", flexDirection: "column", gap: 0 }}>
         {isLoadingMsgs ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 14, paddingBottom: 20 }}>
             {[1, 2, 3, 4].map(i => (
@@ -765,124 +904,123 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
             <div style={{ fontSize: 13, color: Z.sub }}>Hãy gửi lời chào đầu tiên</div>
           </div>
         ) : (
-        grouped.map(msg => {
-          const sender = getSender(msg);
-          const senderId = typeof msg.senderId === "object" ? (msg.senderId._id || msg.senderId.id) : msg.senderId;
-          const mine = senderId === myId;
-          const fi = msg.file ? fIcon(msg.file.name) : null;
-          const hov = hoverMsgId === msg._id;
-          const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("vi", { hour: "2-digit", minute: "2-digit" }) : "";
-          return (
-            <div key={msg._id}>
-              {/* Date separator */}
-              {msg.showDateSep && (
-                <div className="date-sep"><span>{formatDateSep(msg.createdAt)}</span></div>
-              )}
-              <div className="msg-in"
-                onMouseEnter={() => setHoverMsgId(msg._id)}
-                onMouseLeave={() => setHoverMsgId(null)}
-                style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 6, marginBottom: msg.last ? 10 : 2 }}
-              >
-                {/* Avatar for other's messages */}
-                {!mine && <div style={{ width: 32, flexShrink: 0 }}>{msg.last && <Av user={sender} size={32} />}</div>}
+          grouped.map(msg => {
+            const sender = getSender(msg);
+            const senderId = typeof msg.senderId === "object" ? (msg.senderId._id || msg.senderId.id) : msg.senderId;
+            const mine = senderId === myId;
+            const fi = msg.file ? fIcon(msg.file.name) : null;
+            const hov = hoverMsgId === msg._id;
+            const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("vi", { hour: "2-digit", minute: "2-digit" }) : "";
+            return (
+              <div key={msg._id}>
+                {/* Date separator */}
+                {msg.showDateSep && (
+                  <div className="date-sep"><span>{formatDateSep(msg.createdAt)}</span></div>
+                )}
+                <div className="msg-in"
+                  onMouseEnter={() => setHoverMsgId(msg._id)}
+                  onMouseLeave={() => setHoverMsgId(null)}
+                  style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 6, marginBottom: msg.last ? 10 : 2 }}
+                >
+                  {/* Avatar for other's messages */}
+                  {!mine && <div style={{ width: 32, flexShrink: 0 }}>{msg.last && <Av user={sender} size={32} />}</div>}
 
-                {/* Bubble + actions wrapper — mine pushes to right via marginLeft auto */}
-                <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 4, marginLeft: mine ? "auto" : 0, maxWidth: "70%" }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start" }}>
-                  {!mine && msg.first && conv.type === "group" && (
-                    <div style={{ fontSize: 11.5, fontWeight: 600, color: userColor(sender), marginBottom: 3, marginLeft: 2 }}>{shortName(sender)}</div>
-                  )}
+                  {/* Bubble + actions wrapper — mine pushes to right via marginLeft auto */}
+                  <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 4, marginLeft: mine ? "auto" : 0, maxWidth: "70%" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start" }}>
+                      {!mine && msg.first && conv.type === "group" && (
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: userColor(sender), marginBottom: 3, marginLeft: 2 }}>{shortName(sender)}</div>
+                      )}
 
-                  {msg.recalled ? (
-                    <div style={{
-                      padding: "8px 13px",
-                      borderRadius: 14,
-                      background: "#f1f5f9",
-                      color: Z.sub,
-                      fontSize: 12.5,
-                      fontStyle: "italic",
-                      border: `1px dashed ${Z.border}`,
-                      display: "flex", alignItems: "center", gap: 6
-                    }}>
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
-                      Tin nhắn đã được thu hồi
-                    </div>
-                  ) : (
-                    <>
-                  {msg.images && msg.images.length > 0 && (
-                    <div>
-                      {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={false} />}
-                      {msg.images.map((img, idx) => <img key={idx} src={img} alt="" style={{ maxWidth: 220, maxHeight: 180, borderRadius: 14, display: "block", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", marginBottom: 4 }} />)}
-                    </div>
-                  )}
-
-                  {msg.file && (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", padding: "11px 14px", borderRadius: 14, background: mine ? Z.blue : Z.surface, border: mine ? "none" : `1px solid ${Z.border}`, boxShadow: mine ? `0 2px 8px rgba(37,99,235,0.25)` : "0 1px 4px rgba(0,0,0,0.07)", minWidth: 220, maxWidth: 280 }}>
-                      {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={mine} />}
-                      <div 
-                        onClick={() => { if(msg.file.url) window.open(msg.file.url, "_blank"); }}
-                        style={{ display: "flex", alignItems: "center", gap: 12, cursor: msg.file.url ? "pointer" : "default" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: mine ? "rgba(255,255,255,0.2)" : fi.c + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{fi.i}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: mine ? "white" : Z.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: msg.file.url ? 'underline' : 'none' }}>{msg.file.name}</div>
-                          <div style={{ fontSize: 11, color: mine ? "rgba(255,255,255,0.7)" : Z.sub, marginTop: 2 }}>{fSize(msg.file.size)}</div>
+                      {msg.recalled ? (
+                        <div style={{
+                          padding: "8px 13px",
+                          borderRadius: 14,
+                          background: "#f1f5f9",
+                          color: Z.sub,
+                          fontSize: 12.5,
+                          fontStyle: "italic",
+                          border: `1px dashed ${Z.border}`,
+                          display: "flex", alignItems: "center", gap: 6
+                        }}>
+                          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.51" /></svg>
+                          Tin nhắn đã được thu hồi
                         </div>
-                      </div>
-                    </div>
-                  )}
+                      ) : (
+                        <>
+                          {msg.images && msg.images.length > 0 && (
+                            <div>
+                              {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={false} />}
+                              {msg.images.map((img, idx) => <img key={idx} src={img} alt="" style={{ maxWidth: 220, maxHeight: 180, borderRadius: 14, display: "block", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", marginBottom: 4 }} />)}
+                            </div>
+                          )}
 
-                  {msg.text && (
-                    <div style={{
-                      padding: "9px 13px",
-                      borderRadius: mine
-                        ? (msg.first && msg.last ? "18px 18px 4px 18px" : msg.first ? "18px 18px 4px 18px" : msg.last ? "18px 4px 4px 18px" : "18px 4px 4px 18px")
-                        : (msg.first && msg.last ? "18px 18px 18px 4px" : msg.first ? "18px 18px 18px 4px" : msg.last ? "4px 18px 18px 4px" : "4px 18px 18px 4px"),
-                      background: mine ? Z.blue : Z.msgOther,
-                      color: mine ? "white" : Z.text,
-                      fontSize: 13.5, lineHeight: 1.58, wordBreak: "break-word",
-                      boxShadow: mine ? `0 2px 8px rgba(37,99,235,0.3)` : "0 1px 4px rgba(0,0,0,0.07)",
-                    }}>
-                      {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={mine} />}
-                      {msg.text}
-                    </div>
-                  )}
-                    </>
-                  )}
+                          {msg.file && (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", padding: "11px 14px", borderRadius: 14, background: mine ? Z.blue : Z.surface, border: mine ? "none" : `1px solid ${Z.border}`, boxShadow: mine ? `0 2px 8px rgba(37,99,235,0.25)` : "0 1px 4px rgba(0,0,0,0.07)", minWidth: 220, maxWidth: 280 }}>
+                              {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={mine} />}
+                              <div
+                                onClick={() => { if (msg.file.url) window.open(msg.file.url, "_blank"); }}
+                                style={{ display: "flex", alignItems: "center", gap: 12, cursor: msg.file.url ? "pointer" : "default" }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 10, background: mine ? "rgba(255,255,255,0.2)" : fi.c + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{fi.i}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: mine ? "white" : Z.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: msg.file.url ? 'underline' : 'none' }}>{msg.file.name}</div>
+                                  <div style={{ fontSize: 11, color: mine ? "rgba(255,255,255,0.7)" : Z.sub, marginTop: 2 }}>{fSize(msg.file.size)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
-                  {msg.last && (
-                    <div style={{ fontSize: 10.5, color: Z.sub, marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
-                      {time}{mine && <span style={{ color: "#60a5fa", fontSize: 12 }}>✓✓</span>}
-                    </div>
-                  )}
-                  </div>
+                          {msg.text && (
+                            <div style={{
+                              padding: "9px 13px",
+                              borderRadius: mine
+                                ? (msg.first && msg.last ? "18px 18px 4px 18px" : msg.first ? "18px 18px 4px 18px" : msg.last ? "18px 4px 4px 18px" : "18px 4px 4px 18px")
+                                : (msg.first && msg.last ? "18px 18px 18px 4px" : msg.first ? "18px 18px 18px 4px" : msg.last ? "4px 18px 18px 4px" : "4px 18px 18px 4px"),
+                              background: mine ? Z.blue : Z.msgOther,
+                              color: mine ? "white" : Z.text,
+                              fontSize: 13.5, lineHeight: 1.58, wordBreak: "break-word",
+                              boxShadow: mine ? `0 2px 8px rgba(37,99,235,0.3)` : "0 1px 4px rgba(0,0,0,0.07)",
+                            }}>
+                              {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={mine} />}
+                              {msg.text}
+                            </div>
+                          )}
+                        </>
+                      )}
 
-                  {/* Hover actions — always to the right of bubble */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: hov ? 1 : 0, transition: "opacity 0.15s", flexShrink: 0, alignSelf: "flex-end", paddingBottom: msg.last ? 20 : 2 }}>
-                    {/* Reply button */}
-                    <button onClick={() => { setReplyTo({ senderId: senderId, text: msg.text || null, image: msg.images?.[0] || null, fileName: msg.file?.name || null }); setContextMenu(null); }} title="Trả lời"
-                      style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
-                    </button>
-                    {/* More (⋯) button */}
-                    <button
-                      title="Thêm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setContextMenu({ msgId: msg._id, x: rect.left, y: rect.bottom + 6, msg });
-                      }}
-                      style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    >
-                      <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
-                    </button>
+                      {msg.last && (
+                        <div style={{ fontSize: 10.5, color: Z.sub, marginTop: 3, display: "flex", alignItems: "center", gap: 3 }}>
+                          {time}{mine && <span style={{ color: "#60a5fa", fontSize: 12 }}>✓✓</span>}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hover actions — always to the right of bubble */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, opacity: hov ? 1 : 0, transition: "opacity 0.15s", flexShrink: 0, alignSelf: "flex-end", paddingBottom: msg.last ? 20 : 2 }}>
+                      {/* Reply button */}
+                      <button onClick={() => { setReplyTo({ senderId: senderId, text: msg.text || null, image: msg.images?.[0] || null, fileName: msg.file?.name || null }); setContextMenu(null); }} title="Trả lời"
+                        style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>
+                      </button>
+                      {/* More (⋯) button */}
+                      <button
+                        title="Thêm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setContextMenu({ msgId: msg._id, x: rect.left, y: rect.bottom + 6, msg });
+                        }}
+                        style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >
+                        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })
+            );
+          })
         )}
-        <div ref={btm} />
       </div>
 
       {/* Context Menu */}
@@ -902,7 +1040,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
         return (
           <div
             className="fade-in"
-            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
             style={{
               position: "fixed", left, top, zIndex: 2000,
               background: "white", borderRadius: 12,
@@ -921,21 +1059,21 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
               onMouseEnter={e => e.currentTarget.style.background = Z.blueLight}
               onMouseLeave={e => e.currentTarget.style.background = "none"}
             >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>
               Trả lời
             </button>
             {/* Copy text */}
             {cmMsg.text && !cmMsg.recalled && (
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(cmMsg.text).catch(() => {});
+                  navigator.clipboard.writeText(cmMsg.text).catch(() => { });
                   setContextMenu(null);
                 }}
                 style={{ width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 500, color: Z.text, fontFamily: "'Be Vietnam Pro',sans-serif", textAlign: "left" }}
                 onMouseEnter={e => e.currentTarget.style.background = Z.blueLight}
                 onMouseLeave={e => e.currentTarget.style.background = "none"}
               >
-                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.sub} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                 Sao chép văn bản
               </button>
             )}
@@ -952,7 +1090,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
                   onMouseEnter={e => e.currentTarget.style.background = "#fee2e2"}
                   onMouseLeave={e => e.currentTarget.style.background = "none"}
                 >
-                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></svg>
+                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.51" /></svg>
                   Thu hồi tin nhắn
                 </button>
               </>
@@ -978,7 +1116,9 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
         padding: "10px 14px",
         background: Z.surface,
         borderTop: `1px solid ${Z.border}`,
-        paddingBottom: isMobile ? `calc(10px + env(safe-area-inset-bottom) + 58px)` : 10,
+        paddingBottom: isMobile 
+          ? (isKeyboardOpen ? 10 : `calc(10px + env(safe-area-inset-bottom) + 58px)`) 
+          : 10,
       }}>
         {replyTo && (
           <div className="fade-in" style={{
@@ -986,7 +1126,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
             background: Z.blueLight, borderRadius: 10,
             padding: "8px 12px", marginBottom: 8, borderLeft: `3px solid ${Z.blue}`,
           }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={Z.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>
             {/* Image preview in reply bar */}
             {replyTo.image && (
               <img src={replyTo.image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
@@ -1025,14 +1165,14 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
             display: "flex", alignItems: "center", flexShrink: 0, marginBottom: 2,
             color: Z.sub, transition: "color 0.15s", opacity: isUploading ? 0.5 : 1
           }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
           </button>
           <button onClick={() => setShowEmoji(s => !s)} style={{
             background: "none", border: "none", cursor: "pointer", padding: 2,
             display: "flex", alignItems: "center", flexShrink: 0, marginBottom: 2,
             color: showEmoji ? Z.blue : Z.sub, transition: "color 0.15s",
           }}>
-            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M8 13s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" /></svg>
           </button>
           <div ref={edRef} contentEditable suppressContentEditableWarning
             className="msg-input"
@@ -1061,7 +1201,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
               stroke={(hasText || replyTo) ? "white" : Z.sub}
               strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
               style={{ transform: "rotate(45deg)", transition: "stroke 0.15s" }}
-            ><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+            ><path d="M22 2 11 13" /><path d="M22 2 15 22 11 13 2 9z" /></svg>
           </button>
         </div>
       </div>
@@ -1076,7 +1216,7 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState("");
-  
+
   // Group Edit State
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
@@ -1183,15 +1323,15 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
       {(isMobile || isTablet) && <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 999 }} />}
       {showAddMember && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1001, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={() => { if(!isAdding) { setShowAddMember(false); setSelectedIds([]); setAddError(""); } }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(2px)" }} />
+          <div onClick={() => { if (!isAdding) { setShowAddMember(false); setSelectedIds([]); setAddError(""); } }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(2px)" }} />
           <div className="fade-in" style={{ position: "relative", background: Z.surface, borderRadius: 16, width: "90%", maxWidth: 400, display: "flex", flexDirection: "column", maxHeight: "80vh", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
             <div style={{ padding: "16px 20px", borderBottom: `1px solid ${Z.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: Z.text }}>Thêm thành viên</span>
               <button disabled={isAdding} onClick={() => { setShowAddMember(false); setSelectedIds([]); setAddError(""); }} style={{ background: "none", border: "none", cursor: isAdding ? "not-allowed" : "pointer", color: Z.sub, fontSize: 24, lineHeight: 1 }}>×</button>
             </div>
             <div style={{ padding: "12px 16px" }}>
-               <input disabled={isAdding} value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." style={{ width: "100%", background: Z.leftPanel, border: `1.5px solid ${Z.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, outline: "none", color: Z.text, fontFamily: "'Be Vietnam Pro',sans-serif" }} />
-               {addError && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 8, fontWeight: 500 }}>{addError}</div>}
+              <input disabled={isAdding} value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." style={{ width: "100%", background: Z.leftPanel, border: `1.5px solid ${Z.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, outline: "none", color: Z.text, fontFamily: "'Be Vietnam Pro',sans-serif" }} />
+              {addError && <div style={{ color: "#ef4444", fontSize: 12, marginTop: 8, fontWeight: 500 }}>{addError}</div>}
             </div>
             <div style={{ flex: 1, overflow: "auto", padding: "0 16px 16px" }}>
               {filteredUsers.length === 0 ? (
@@ -1207,11 +1347,11 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
               )}
             </div>
             <div style={{ padding: "12px 16px", borderTop: `1px solid ${Z.border}`, display: "flex", gap: 8, justifyContent: "flex-end", background: Z.leftPanel, borderRadius: "0 0 16px 16px" }}>
-               <button disabled={isAdding} onClick={() => { setShowAddMember(false); setSelectedIds([]); setAddError(""); }} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${Z.border}`, background: "white", color: Z.text, fontSize: 13, fontWeight: 600, cursor: isAdding ? "not-allowed" : "pointer", opacity: isAdding ? 0.6 : 1 }}>Huỷ</button>
-               <button onClick={handleAddMember} disabled={!selectedIds.length || isAdding} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: Z.blue, color: "white", fontSize: 13, fontWeight: 600, cursor: (!selectedIds.length || isAdding) ? "not-allowed" : "pointer", opacity: (!selectedIds.length || isAdding) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8 }}>
-                 {isAdding && <svg className="sk-shimmer" width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
-                 {isAdding ? "Đang thêm..." : `Thêm ${selectedIds.length ? `(${selectedIds.length})` : ""}`}
-               </button>
+              <button disabled={isAdding} onClick={() => { setShowAddMember(false); setSelectedIds([]); setAddError(""); }} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${Z.border}`, background: "white", color: Z.text, fontSize: 13, fontWeight: 600, cursor: isAdding ? "not-allowed" : "pointer", opacity: isAdding ? 0.6 : 1 }}>Huỷ</button>
+              <button onClick={handleAddMember} disabled={!selectedIds.length || isAdding} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: Z.blue, color: "white", fontSize: 13, fontWeight: 600, cursor: (!selectedIds.length || isAdding) ? "not-allowed" : "pointer", opacity: (!selectedIds.length || isAdding) ? 0.6 : 1, display: "flex", alignItems: "center", gap: 8 }}>
+                {isAdding && <svg className="sk-shimmer" width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>}
+                {isAdding ? "Đang thêm..." : `Thêm ${selectedIds.length ? `(${selectedIds.length})` : ""}`}
+              </button>
             </div>
           </div>
         </div>
@@ -1229,7 +1369,7 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
           <div style={{ display: "flex", justifyContent: "center" }}>
             {isGroup
               ? (
-                <div style={{ position: "relative", cursor: isAdmin ? (isUpdating ? "wait" : "pointer") : "default" }} onClick={() => { if(isAdmin) groupAvatarInputRef.current?.click() }}>
+                <div style={{ position: "relative", cursor: isAdmin ? (isUpdating ? "wait" : "pointer") : "default" }} onClick={() => { if (isAdmin) groupAvatarInputRef.current?.click() }}>
                   <Av isGroup gAvatar={conv.avatar} groupColor={conv.color} size={64} />
                   {isAdmin && (
                     <div style={{ position: "absolute", bottom: -4, right: -4, width: 22, height: 22, borderRadius: "50%", background: Z.surface, display: "flex", alignItems: "center", justifyContent: "center", padding: 2 }}>
@@ -1242,15 +1382,15 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
               : <Av user={otherUser} size={64} dot />
             }
           </div>
-          
+
           {isEditingName ? (
             <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "center" }}>
-              <input 
+              <input
                 autoFocus
-                value={editNameValue} 
-                onChange={e => setEditNameValue(e.target.value)} 
+                value={editNameValue}
+                onChange={e => setEditNameValue(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleRenameGroup()}
-                style={{ background: Z.leftPanel, border: `1px solid ${Z.border}`, padding: "4px 8px", borderRadius: 4, color: Z.text, fontSize: 13, width: 150 }} 
+                style={{ background: Z.leftPanel, border: `1px solid ${Z.border}`, padding: "4px 8px", borderRadius: 4, color: Z.text, fontSize: 13, width: 150 }}
               />
               <button disabled={isUpdating} onClick={handleRenameGroup} style={{ background: Z.blue, color: "white", border: "none", borderRadius: 4, padding: "0 8px", cursor: isUpdating ? "wait" : "pointer" }}>Lưu</button>
               <button onClick={() => setIsEditingName(false)} style={{ background: "transparent", color: Z.sub, border: "none", cursor: "pointer" }}>Huỷ</button>
@@ -1268,57 +1408,58 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
 
           <div style={{ fontSize: 12, color: Z.sub, marginTop: 3 }}>{isGroup ? `${conv.participants?.length} thành viên` : otherUser?.role || ""}</div>
         </div>
-      {isGroup && (
-        <div style={{ padding: "14px 16px", flex: 1, overflow: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: Z.sub, textTransform: "uppercase", letterSpacing: "0.08em" }}>Thành viên</div>
-            {isAdmin && (
-              <button onClick={() => setShowAddMember(true)} style={{ background: "none", border: "none", color: Z.blue, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
-                + Thêm
-              </button>
-            )}
-          </div>
-          {conv.participants?.map(m => {
-            const mId = m._id || m.id;
-            const isMemAdmin = (conv.admins || []).includes(mId);
-            const isMemCreator = (typeof conv.createdBy === "string" ? conv.createdBy : conv.createdBy?._id) === mId;
-            const isMe = mId === myId;
-            
-            return (
-            <div key={mId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${Z.border}` }}>
-              <Av user={m} size={32} dot />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: Z.text, display: "flex", alignItems: "center", gap: 4 }}>
-                  {isMe ? "Bạn" : displayName(m)}
-                  {isMemCreator && <span style={{ fontSize: 9, background: "#f59e0b", color: "white", padding: "1px 4px", borderRadius: 4 }}>Người Tạo</span>}
-                  {isMemAdmin && !isMemCreator && <span style={{ fontSize: 9, background: Z.blue, color: "white", padding: "1px 4px", borderRadius: 4 }}>Quản Trị</span>}
-                </div>
-                <div style={{ fontSize: 11, color: Z.sub }}>{m.role}</div>
-              </div>
-              
-              {/* Admin Controls */}
-              {(isAdmin || isMe) && (
-                <div style={{ display: "flex", gap: 4 }}>
-                  {isAdmin && !isMemCreator && !isMe && (
-                    <button onClick={() => handleRoleChange(mId, isMemAdmin, isMemCreator)} 
-                      title={isMemAdmin ? "Giáng quyền" : "Thăng quyền"}
-                      style={{ background: Z.leftPanel, border: `1px solid ${Z.border}`, borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 12 }}>
-                      {isMemAdmin ? "↓" : "↑"}
-                    </button>
-                  )}
-                  {(!isMemCreator || isMe) && (
-                    <button onClick={() => handleKick(mId, isMemCreator)} 
-                      title={isMe ? "Rời nhóm" : "Xoá khỏi nhóm"}
-                      style={{ background: "#fee2e2", border: `1px solid #fca5a5`, color: "#ef4444", borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 12 }}>
-                      {isMe ? "🚪" : "×"}
-                    </button>
-                  )}
-                </div>
+        {isGroup && (
+          <div style={{ padding: "14px 16px", flex: 1, overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: Z.sub, textTransform: "uppercase", letterSpacing: "0.08em" }}>Thành viên</div>
+              {isAdmin && (
+                <button onClick={() => setShowAddMember(true)} style={{ background: "none", border: "none", color: Z.blue, fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 3 }}>
+                  + Thêm
+                </button>
               )}
             </div>
-          )})}
-        </div>
-      )}
+            {conv.participants?.map(m => {
+              const mId = m._id || m.id;
+              const isMemAdmin = (conv.admins || []).includes(mId);
+              const isMemCreator = (typeof conv.createdBy === "string" ? conv.createdBy : conv.createdBy?._id) === mId;
+              const isMe = mId === myId;
+
+              return (
+                <div key={mId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${Z.border}` }}>
+                  <Av user={m} size={32} dot />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: Z.text, display: "flex", alignItems: "center", gap: 4 }}>
+                      {isMe ? "Bạn" : displayName(m)}
+                      {isMemCreator && <span style={{ fontSize: 9, background: "#f59e0b", color: "white", padding: "1px 4px", borderRadius: 4 }}>Người Tạo</span>}
+                      {isMemAdmin && !isMemCreator && <span style={{ fontSize: 9, background: Z.blue, color: "white", padding: "1px 4px", borderRadius: 4 }}>Quản Trị</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: Z.sub }}>{m.role}</div>
+                  </div>
+
+                  {/* Admin Controls */}
+                  {(isAdmin || isMe) && (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {isAdmin && !isMemCreator && !isMe && (
+                        <button onClick={() => handleRoleChange(mId, isMemAdmin, isMemCreator)}
+                          title={isMemAdmin ? "Giáng quyền" : "Thăng quyền"}
+                          style={{ background: Z.leftPanel, border: `1px solid ${Z.border}`, borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 12 }}>
+                          {isMemAdmin ? "↓" : "↑"}
+                        </button>
+                      )}
+                      {(!isMemCreator || isMe) && (
+                        <button onClick={() => handleKick(mId, isMemCreator)}
+                          title={isMe ? "Rời nhóm" : "Xoá khỏi nhóm"}
+                          style={{ background: "#fee2e2", border: `1px solid #fca5a5`, color: "#ef4444", borderRadius: 4, width: 24, height: 24, cursor: "pointer", fontSize: 12 }}>
+                          {isMe ? "🚪" : "×"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </>
   );
@@ -1326,13 +1467,26 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
 
 // Contacts View — create new conversations
 export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile }) {
+  const [activeTab, setActiveTab] = useState<"users" | "groups">("users");
+  const [joinedGroups, setJoinedGroups] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [showGroup, setShowGroup] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
 
-  const filtered = chatUsers.filter(u => {
+  useEffect(() => {
+    if (activeTab === "groups") {
+      api.getJoinedGroups().then(res => res.data && setJoinedGroups(res.data)).catch(console.error);
+    }
+  }, [activeTab]);
+
+  const filteredUsers = chatUsers.filter(u => {
     const name = displayName(u);
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
+  
+  const filteredGroups = joinedGroups.filter(g => {
+    const name = g.name || "Nhóm";
     return name.toLowerCase().includes(search.toLowerCase());
   });
 
@@ -1355,30 +1509,37 @@ export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile 
     }
   };
 
-  const startDirect = (userId) => {
-    // Navigate to chat tab immediately (no waiting for API)
-    onNavigate?.();
-    // API call runs in background
-    api.createDirect(userId).then(res => {
-      if (res.data) onStartChat(res.data);
-    }).catch(err => console.error("Create direct error:", err));
+  const startDirect = async (userId) => {
+    try {
+      const res = await api.createDirect(userId);
+      if (res.data) {
+        onStartChat(res.data);   // sets activeId first
+        onNavigate?.();          // then switch to chat tab
+      }
+    } catch (err) {
+      console.error("Create direct error:", err);
+    }
   };
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
       <div style={{ width: isMobile ? "100%" : 320, background: Z.sidebar, borderRight: `1px solid ${Z.border}`, display: "flex", flexDirection: "column", paddingBottom: isMobile ? 60 : 0 }}>
-        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${Z.border}` }}>
+        <div style={{ padding: "14px 16px 0", borderBottom: `1px solid ${Z.border}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <span style={{ fontSize: 17, fontWeight: 700, color: Z.text }}>Danh Bạ</span>
-            <button onClick={() => setShowGroup(s => !s)} style={{ padding: "6px 14px", borderRadius: 20, border: "none", background: Z.blue, color: "white", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Nhóm</button>
+            <button onClick={() => setShowGroup(s => !s)} style={{ padding: "6px 14px", borderRadius: 20, border: "none", background: Z.blue, color: "white", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Tạo Nhóm</button>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: Z.leftPanel, borderRadius: 20, padding: "7px 14px" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+             <button onClick={() => setActiveTab("users")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "users" ? Z.blueLight : "transparent", color: activeTab === "users" ? Z.blue : Z.sub }}>Bạn bè</button>
+             <button onClick={() => setActiveTab("groups")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "groups" ? Z.blueLight : "transparent", color: activeTab === "groups" ? Z.blue : Z.sub }}>Tất cả Nhóm</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: Z.leftPanel, borderRadius: 20, padding: "7px 14px", marginBottom: 14 }}>
             <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth={2.5} strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm người dùng..." style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 13, color: Z.text }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm kiếm..." style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 13, color: Z.text }} />
           </div>
         </div>
         <div style={{ flex: 1, overflow: "auto" }}>
-          {filtered.map(user => (
+          {activeTab === "users" && filteredUsers.map(user => (
             <div key={user._id || user.id}
               onClick={() => startDirect(user._id || user.id)}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", cursor: "pointer", transition: "background 0.12s" }}
@@ -1399,10 +1560,38 @@ export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile 
               )}
             </div>
           ))}
+
+          {activeTab === "groups" && filteredGroups.map(group => {
+             const gAvatar = group.avatar || group.name?.substring(0, 2).toUpperCase() || "GR";
+             const gColor = group.color || Z.blue;
+             return (
+               <div key={group._id} 
+                 onClick={() => {
+                   onStartChat(group); 
+                   onNavigate?.(); 
+                 }}
+                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", cursor: "pointer", transition: "background 0.12s" }}
+                 onMouseEnter={e => e.currentTarget.style.background = Z.leftPanel}
+                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+               >
+                 <Av isGroup gAvatar={gAvatar} groupColor={gColor} size={42} />
+                 <div style={{ flex: 1 }}>
+                   <div style={{ fontSize: 13.5, fontWeight: 700, color: Z.text }}>{group.name || "Nhóm"}</div>
+                   <div style={{ fontSize: 12, color: Z.sub }}>{group.participants?.length || 0} thành viên</div>
+                 </div>
+               </div>
+             )
+          })}
+
+          {activeTab === "groups" && filteredGroups.length === 0 && (
+            <div style={{ padding: "30px 20px", textAlign: "center", color: Z.sub, fontSize: 13 }}>
+              Chưa tham gia nhóm nào.
+            </div>
+          )}
         </div>
       </div>
       {(!isMobile || showGroup) && (
-        <div style={{ 
+        <div style={{
           flex: 1, background: Z.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: isMobile ? 20 : 40,
           position: (isMobile && showGroup) ? "fixed" : "static", inset: 0, zIndex: 1000
         }}>
@@ -1480,17 +1669,17 @@ export function ProfileView({ me, isMobile, onUpdate }) {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: Z.bg, overflowY: "auto", padding: isMobile ? 20 : 40, alignItems: "center" }}>
       <div style={{ width: "100%", maxWidth: 500, background: Z.surface, borderRadius: 16, padding: isMobile ? 20 : 32, boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: Z.text, marginBottom: 24, textAlign: "center" }}>Tài Khoản Của Tôi</h2>
-        
+
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 32 }}>
           <div style={{ position: "relative" }}>
             <Av user={me} size={100} />
             <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" style={{ display: "none" }} />
-            <button 
+            <button
               disabled={isUpdating}
               onClick={() => fileInputRef.current?.click()}
               style={{ position: "absolute", bottom: 0, right: 0, width: 32, height: 32, borderRadius: "50%", border: `2px solid ${Z.surface}`, background: Z.blue, color: "white", cursor: isUpdating ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 }}
             >
-              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
             </button>
           </div>
           <div style={{ fontSize: 13, color: Z.sub, marginTop: 12 }}>{me?.email}</div>
@@ -1506,9 +1695,9 @@ export function ProfileView({ me, isMobile, onUpdate }) {
             <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: Z.textMd, marginBottom: 8 }}>Tên</label>
             <input value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: "100%", background: Z.leftPanel, border: `1.5px solid ${Z.border}`, padding: "10px 14px", borderRadius: 10, fontSize: 14, outline: "none", color: Z.text }} />
           </div>
-          
-          <button 
-            onClick={handleSave} 
+
+          <button
+            onClick={handleSave}
             disabled={isUpdating}
             style={{ marginTop: 12, width: "100%", padding: "12px", background: Z.blue, color: "white", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: isUpdating ? "wait" : "pointer", transition: "opacity 0.2s", opacity: isUpdating ? 0.7 : 1 }}>
             {isUpdating ? "Đang lưu..." : "Lưu thay đổi"}

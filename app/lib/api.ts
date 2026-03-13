@@ -1,6 +1,6 @@
 // API client for chat backend
 
-const API_BASE = "http://localhost:8081/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8081/api/v1";
 
 function getToken(): string | null {
     if (typeof window === "undefined") return null;
@@ -86,6 +86,10 @@ export async function uploadUserAvatar(file: File) {
 
 export async function getConversations() {
     return request<any>("/chat/conversations");
+}
+
+export async function getJoinedGroups() {
+    return request<any>("/chat/groups");
 }
 
 export async function getMessages(conversationId: string, page = 1, limit = 50) {
