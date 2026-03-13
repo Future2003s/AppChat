@@ -2,7 +2,7 @@ import ChatApp from "./components/ChatApp";
 
 export const metadata = {
   title: "ChatLocal - Tin nhắn nội bộ",
-  description: "Hệ thống nhắn tin nội bộ tức thời",
+  description: "Nhắn tin nội bộ",
   themeColor: "#ffffff",
   appleWebApp: {
     capable: true,

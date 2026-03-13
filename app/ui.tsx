@@ -63,12 +63,12 @@ export function useViewportHeight() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    
+
     const update = () => {
       setVh(window.innerHeight);
       if (window.visualViewport) setVvh(window.visualViewport.height);
     };
-    
+
     update();
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", update);
@@ -76,7 +76,7 @@ export function useViewportHeight() {
     } else {
       window.addEventListener("resize", update);
     }
-    
+
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", update);
@@ -465,13 +465,13 @@ export function ConvList({ convs, activeId, setActiveId, me, onDelete, isMobile 
               <SwipeRow key={conv._id} isMobile={isMobile} onDelete={() => setDeleteConv(conv)}>
                 <div
                   className="conv-item"
-                  onClick={(e) => { 
+                  onClick={(e) => {
                     /* Prevent firing if it was a swipe */
                     if (isMobile) {
                       const tgt = e.currentTarget.closest('.swiper-container');
                       if (tgt && tgt.getAttribute('data-swiping') === 'true') return;
                     }
-                    setActiveId(conv._id); 
+                    setActiveId(conv._id);
                   }}
                   onMouseEnter={() => setHoverId(conv._id)}
                   onMouseLeave={() => setHoverId(null)}
@@ -568,7 +568,7 @@ export function SwipeRow({ onDelete, isMobile, children }: { onDelete: () => voi
     if (!isDragging.current) return;
     const dx = e.touches[0].clientX - startX.current;
     const dy = Math.abs(e.touches[0].clientY - startY.current);
-    
+
     // If vertical scrolling dominates, cancel swipe
     if (dy > Math.abs(dx) && Math.abs(dx) < 10) {
       isDragging.current = false;
@@ -631,7 +631,7 @@ export function SwipeRow({ onDelete, isMobile, children }: { onDelete: () => voi
   );
 }
 
-export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTablet, mobilePanel, setMobilePanel, isLoadingMsgs }) {
+export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTablet, mobilePanel, setMobilePanel, isLoadingMsgs, onConfirmAction }) {
   const { isKeyboardOpen } = useViewportHeight();
   const [showEmoji, setShowEmoji] = useState(false);
   const [hasText, setHasText] = useState(false);
@@ -639,6 +639,8 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
   const [hoverMsgId, setHoverMsgId] = useState(null);
   const [contextMenu, setContextMenu] = useState(null); // { msgId, x, y, msg }
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [viewImage, setViewImage] = useState(null);
   const fileInputRef = useRef();
   const scrollRef = useRef();   // ref on the messages scroll container
   const prevConvId = useRef(null);
@@ -747,8 +749,9 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
     try {
-      const res = await api.uploadChatFile(file);
+      const res = await api.uploadChatFile(file, (p) => setUploadProgress(p));
       if (res.data) {
         if (res.data.isImage) {
           onSend({ images: [res.data.url], replyTo: replyTo || undefined });
@@ -762,6 +765,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
       alert("Lỗi tải lên: " + (err.message || "Hãy thử lại"));
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -774,7 +778,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
         const r = new FileReader();
         r.onload = (ev) => {
           const img = document.createElement("img"); img.src = ev.target.result;
-          img.style.cssText = "max-width:220px;max-height:160px;border-radius:10px;display:block;margin:4px 0;";
+          img.style.cssText = "max-width:100%; max-height:200px; border-radius:10px; display:block; margin:4px 0; object-fit: contain;";
           const sel = window.getSelection();
           if (sel && sel.rangeCount) { sel.getRangeAt(0).insertNode(img); sel.collapseToEnd(); } else edRef.current?.appendChild(img);
           setHasText(true);
@@ -951,7 +955,26 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
                           {msg.images && msg.images.length > 0 && (
                             <div>
                               {msg.replyTo && <QuoteBar reply={msg.replyTo} mine={false} />}
-                              {msg.images.map((img, idx) => <img key={idx} src={img} alt="" style={{ maxWidth: 220, maxHeight: 180, borderRadius: 14, display: "block", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", marginBottom: 4 }} />)}
+                              {msg.images.map((img, idx) => (
+                                <img
+                                  key={idx}
+                                  src={img}
+                                  alt=""
+                                  onClick={() => setViewImage(img)}
+                                  style={{ 
+                                    maxWidth: "100%", 
+                                    maxHeight: 320, 
+                                    width: "auto", 
+                                    height: "auto", 
+                                    borderRadius: 14, 
+                                    display: "block", 
+                                    boxShadow: "0 2px 12px rgba(0,0,0,0.15)", 
+                                    marginBottom: 4, 
+                                    cursor: "zoom-in",
+                                    objectFit: "contain"
+                                  }}
+                                />
+                              ))}
                             </div>
                           )}
 
@@ -1084,7 +1107,15 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
                 <button
                   onClick={() => {
                     setContextMenu(null);
-                    if (confirm("Thu hồi tin nhắn này?")) onRecall(cmMsg._id, conv._id);
+                    if (onConfirmAction) {
+                      onConfirmAction({
+                        title: "Thu hồi tin nhắn",
+                        message: "Bạn có chắc chắn muốn thu hồi tin nhắn này không? Hành động này không thể hoàn tác.",
+                        confirmText: "Thu hồi",
+                        type: "danger",
+                        onConfirm: () => onRecall(cmMsg._id, conv._id)
+                      });
+                    }
                   }}
                   style={{ width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 500, color: "#ef4444", fontFamily: "'Be Vietnam Pro',sans-serif", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = "#fee2e2"}
@@ -1098,6 +1129,30 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
           </div>
         );
       })()}
+
+      {/* Image Modal */}
+      {viewImage && (
+        <div 
+          onClick={() => setViewImage(null)}
+          style={{ 
+            position: "fixed", inset: 0, zIndex: 3000, 
+            background: "rgba(0,0,0,0.9)", display: "flex", 
+            alignItems: "center", justifyContent: "center",
+            backdropFilter: "blur(5px)", cursor: "zoom-out",
+            animation: "fadeIn 0.2s ease"
+          }}
+        >
+          <img 
+            src={viewImage} 
+            alt="Preview" 
+            style={{ maxWidth: "95%", maxHeight: "95%", objectFit: "contain", borderRadius: 8, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }} 
+          />
+          <button 
+            onClick={() => setViewImage(null)}
+            style={{ position: "absolute", top: 20, right: 20, background: "rgba(255,255,255,0.2)", border: "none", color: "white", width: 40, height: 40, borderRadius: "50%", fontSize: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >×</button>
+        </div>
+      )}
 
       {/* Emoji */}
       {showEmoji && (
@@ -1113,13 +1168,13 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
 
       {/* Input */}
       <div style={{
-        padding: "10px 14px",
+        padding: "0px 14px",
         background: Z.surface,
         borderTop: `1px solid ${Z.border}`,
-        paddingBottom: isMobile 
-          ? (isKeyboardOpen ? 10 : `calc(10px + env(safe-area-inset-bottom) + 58px)`) 
+        paddingBottom: isMobile
+          ? (isKeyboardOpen ? 10 : `calc(10px + env(safe-area-inset-bottom) + 10px)`)
           : 10,
-      }}>
+      }} className="flex align-center">
         {replyTo && (
           <div className="fade-in" style={{
             display: "flex", alignItems: "center", gap: 10,
@@ -1155,10 +1210,23 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
           background: Z.leftPanel, borderRadius: 20,
           padding: "8px 10px 8px 14px", minHeight: 46,
           border: `1.5px solid ${Z.border}`, transition: "border-color 0.2s",
+          position: "relative"
         }}
           onFocusCapture={e => e.currentTarget.style.borderColor = Z.blue}
           onBlurCapture={e => e.currentTarget.style.borderColor = Z.border}
         >
+          {isUploading && (
+            <div style={{
+              position: "absolute", top: -4, left: 10, right: 10, height: 3,
+              background: "#e2e8f0", borderRadius: 3, overflow: "hidden"
+            }}>
+              <div style={{
+                height: "100%", background: Z.blue, width: `${uploadProgress}%`,
+                transition: "width 0.3s ease"
+              }} />
+              <div style={{ position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)", fontSize: 10, color: Z.blue, fontWeight: 700 }}>{uploadProgress}%</div>
+            </div>
+          )}
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: "none" }} />
           <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} style={{
             background: "none", border: "none", cursor: isUploading ? "wait" : "pointer", padding: 2,
@@ -1210,7 +1278,7 @@ export function ChatWindow({ conv, msgs, me, onSend, onRecall, isMobile, isTable
 }
 
 // Right Panel
-export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClose, onAddMember, onUpdateGroup, onUpdateMemberRole, onRemoveMember }) {
+export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClose, onAddMember, onUpdateGroup, onUpdateMemberRole, onRemoveMember, onConfirmAction }) {
   const [showAddMember, setShowAddMember] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
@@ -1294,23 +1362,46 @@ export function RightPanel({ conv, me, chatUsers = [], isMobile, isTablet, onClo
 
   const handleRoleChange = async (targetId, currentIsAdmin, isCreator) => {
     if (isCreator) return alert("Không thể thay đổi quyền của người tạo nhóm");
-    if (!confirm(`Bạn muốn ${currentIsAdmin ? 'giáng cấp' : 'thăng cấp'} thành viên này?`)) return;
-    try {
-      await onUpdateMemberRole?.(conv._id, targetId, currentIsAdmin ? "demote" : "promote");
-    } catch (e) {
-      console.error(e);
-      alert("Lỗi phân quyền");
+    
+    // Custom confirm via prop
+    if (onConfirmAction) {
+      onConfirmAction({
+        title: "Thay đổi quyền hạn",
+        message: `Bạn muốn ${currentIsAdmin ? 'giáng cấp' : 'thăng cấp'} thành viên này?`,
+        confirmText: "Xác nhận",
+        type: "info",
+        onConfirm: async () => {
+          try {
+            await onUpdateMemberRole?.(conv._id, targetId, currentIsAdmin ? "demote" : "promote");
+          } catch (e) {
+            console.error(e);
+            alert("Lỗi phân quyền");
+          }
+        }
+      });
+      return;
     }
   };
 
   const handleKick = async (targetId, isCreator) => {
     if (isCreator && targetId !== myId) return alert("Không thể xoá người tạo nhóm");
-    if (!confirm(targetId === myId ? "Bạn có chắc muốn rời nhóm?" : "Bạn có chắc muốn xoá người này?")) return;
-    try {
-      await onRemoveMember?.(conv._id, targetId);
-    } catch (e) {
-      console.error(e);
-      alert("Lỗi xoá thành viên");
+    
+    if (onConfirmAction) {
+      onConfirmAction({
+        title: targetId === myId ? "Rời nhóm" : "Xoá thành viên",
+        message: targetId === myId ? "Bạn có chắc muốn rời nhóm này không?" : "Bạn có chắc muốn xoá người này khỏi nhóm?",
+        confirmText: targetId === myId ? "Rời nhóm" : "Xoá",
+        type: "danger",
+        onConfirm: async () => {
+          try {
+            await onRemoveMember?.(conv._id, targetId);
+          } catch (e) {
+            console.error(e);
+            alert("Lỗi xoá thành viên");
+          }
+        }
+      });
+      return;
     }
   };
 
@@ -1484,7 +1575,7 @@ export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile 
     const name = displayName(u);
     return name.toLowerCase().includes(search.toLowerCase());
   });
-  
+
   const filteredGroups = joinedGroups.filter(g => {
     const name = g.name || "Nhóm";
     return name.toLowerCase().includes(search.toLowerCase());
@@ -1530,8 +1621,8 @@ export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile 
             <button onClick={() => setShowGroup(s => !s)} style={{ padding: "6px 14px", borderRadius: 20, border: "none", background: Z.blue, color: "white", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+ Tạo Nhóm</button>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-             <button onClick={() => setActiveTab("users")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "users" ? Z.blueLight : "transparent", color: activeTab === "users" ? Z.blue : Z.sub }}>Bạn bè</button>
-             <button onClick={() => setActiveTab("groups")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "groups" ? Z.blueLight : "transparent", color: activeTab === "groups" ? Z.blue : Z.sub }}>Tất cả Nhóm</button>
+            <button onClick={() => setActiveTab("users")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "users" ? Z.blueLight : "transparent", color: activeTab === "users" ? Z.blue : Z.sub }}>Bạn bè</button>
+            <button onClick={() => setActiveTab("groups")} style={{ flex: 1, padding: "8px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", background: activeTab === "groups" ? Z.blueLight : "transparent", color: activeTab === "groups" ? Z.blue : Z.sub }}>Tất cả Nhóm</button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: Z.leftPanel, borderRadius: 20, padding: "7px 14px", marginBottom: 14 }}>
             <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth={2.5} strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
@@ -1562,25 +1653,25 @@ export function ContactsView({ chatUsers, me, onStartChat, onNavigate, isMobile 
           ))}
 
           {activeTab === "groups" && filteredGroups.map(group => {
-             const gAvatar = group.avatar || group.name?.substring(0, 2).toUpperCase() || "GR";
-             const gColor = group.color || Z.blue;
-             return (
-               <div key={group._id} 
-                 onClick={() => {
-                   onStartChat(group); 
-                   onNavigate?.(); 
-                 }}
-                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", cursor: "pointer", transition: "background 0.12s" }}
-                 onMouseEnter={e => e.currentTarget.style.background = Z.leftPanel}
-                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-               >
-                 <Av isGroup gAvatar={gAvatar} groupColor={gColor} size={42} />
-                 <div style={{ flex: 1 }}>
-                   <div style={{ fontSize: 13.5, fontWeight: 700, color: Z.text }}>{group.name || "Nhóm"}</div>
-                   <div style={{ fontSize: 12, color: Z.sub }}>{group.participants?.length || 0} thành viên</div>
-                 </div>
-               </div>
-             )
+            const gAvatar = group.avatar || group.name?.substring(0, 2).toUpperCase() || "GR";
+            const gColor = group.color || Z.blue;
+            return (
+              <div key={group._id}
+                onClick={() => {
+                  onStartChat(group);
+                  onNavigate?.();
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", cursor: "pointer", transition: "background 0.12s" }}
+                onMouseEnter={e => e.currentTarget.style.background = Z.leftPanel}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                <Av isGroup gAvatar={gAvatar} groupColor={gColor} size={42} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: Z.text }}>{group.name || "Nhóm"}</div>
+                  <div style={{ fontSize: 12, color: Z.sub }}>{group.participants?.length || 0} thành viên</div>
+                </div>
+              </div>
+            )
           })}
 
           {activeTab === "groups" && filteredGroups.length === 0 && (
@@ -1701,6 +1792,79 @@ export function ProfileView({ me, isMobile, onUpdate }) {
             disabled={isUpdating}
             style={{ marginTop: 12, width: "100%", padding: "12px", background: Z.blue, color: "white", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: isUpdating ? "wait" : "pointer", transition: "opacity 0.2s", opacity: isUpdating ? 0.7 : 1 }}>
             {isUpdating ? "Đang lưu..." : "Lưu thay đổi"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rich Confirm Modal ─────────────────────────────────────────────────────
+
+export function RichConfirmModal({ config, onClose }) {
+  if (!config) return null;
+  const { title, message, confirmText = "Đồng ý", cancelText = "Hủy", onConfirm, type = "info" } = config;
+
+  const isDanger = type === "danger";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 4000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20, animation: "fadeIn 0.2s ease"
+    }}>
+      <div 
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(15, 23, 42, 0.4)", backdropFilter: "blur(8px)" }} 
+      />
+      <div className="scale-up" style={{
+        position: "relative", width: "100%", maxWidth: 360,
+        background: Z.surface, borderRadius: 24, padding: 24,
+        boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+        display: "flex", flexDirection: "column", gap: 16,
+        textAlign: "center"
+      }}>
+        {/* Icon/Circle */}
+        <div style={{
+           width: 64, height: 64, borderRadius: "50%", margin: "0 auto",
+           background: isDanger ? "#fee2e2" : Z.blueLight,
+           display: "flex", alignItems: "center", justifyContent: "center",
+           fontSize: 28
+        }}>
+          {isDanger ? "⚠️" : "❓"}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: Z.text }}>{title}</h3>
+          <p style={{ margin: 0, fontSize: 14, color: Z.sub, lineHeight: 1.5 }}>{message}</p>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+          <button 
+            onClick={onClose}
+            style={{
+              flex: 1, height: 48, borderRadius: 14, border: "none",
+              background: "#f1f5f9", color: Z.textMd, fontWeight: 600,
+              cursor: "pointer", transition: "background 0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "#e2e8f0"}
+            onMouseLeave={e => e.currentTarget.style.background = "#f1f5f9"}
+          >
+            {cancelText}
+          </button>
+          <button 
+            onClick={() => { onConfirm(); onClose(); }}
+            style={{
+              flex: 1, minWidth: 120, height: 48, borderRadius: 14, border: "none",
+              background: isDanger ? "#ef4444" : Z.blue, 
+              color: "white", fontWeight: 600,
+              cursor: "pointer", transition: "opacity 0.2s",
+              boxShadow: isDanger ? "0 4px 12px rgba(239, 68, 68, 0.3)" : "0 4px 12px rgba(37, 99, 235, 0.3)"
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
+            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+          >
+            {confirmText}
           </button>
         </div>
       </div>

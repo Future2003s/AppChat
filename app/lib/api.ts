@@ -34,9 +34,60 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
                 window.location.href = "/login";
             }
         }
-        throw new Error(data.message || `API Error: ${res.status}`);
+        const errorMessage = data.error || data.message || `API Error: ${res.status}`;
+        throw new Error(errorMessage);
     }
     return data;
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+async function uploadRequest<T>(path: string, formData: FormData, onProgress?: (percent: number) => void): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const token = getToken();
+
+        xhr.open("POST", `${API_BASE}${path}`);
+
+        if (token) {
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        }
+
+        xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable && onProgress) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                onProgress(percent);
+            }
+        };
+
+        xhr.onload = () => {
+            let data;
+            try {
+                data = JSON.parse(xhr.responseText);
+            } catch (e) {
+                data = {};
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(data);
+            } else {
+                if (xhr.status === 401) {
+                    logout();
+                    if (typeof window !== "undefined") {
+                        window.location.href = "/login";
+                    }
+                }
+                const errorMessage = data.error || data.message || `API Error: ${xhr.status}`;
+                reject(new Error(errorMessage));
+            }
+        };
+
+        xhr.onerror = () => {
+            reject(new Error("Network Error"));
+        };
+
+        xhr.send(formData);
+    });
 }
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
@@ -73,13 +124,10 @@ export async function updateProfile(data: { firstName: string, lastName: string,
     });
 }
 
-export async function uploadUserAvatar(file: File) {
+export async function uploadUserAvatar(file: File, onProgress?: (percent: number) => void) {
     const formData = new FormData();
     formData.append("avatar", file);
-    return request<any>("/users/avatar", {
-        method: "POST",
-        body: formData
-    });
+    return uploadRequest<any>("/users/avatar", formData, onProgress);
 }
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
@@ -171,11 +219,8 @@ export async function removeGroupMember(conversationId: string, memberId: string
     });
 }
 
-export async function uploadChatFile(file: File) {
+export async function uploadChatFile(file: File, onProgress?: (percent: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    return request<any>("/chat/upload", {
-        method: "POST",
-        body: formData
-    });
+    return uploadRequest<any>("/chat/upload", formData, onProgress);
 }

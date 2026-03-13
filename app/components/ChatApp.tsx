@@ -11,7 +11,7 @@ import { useChat } from "../hooks/useChat";
 // by importing the named exports (components are co-located there for now).
 import {
   Z,
-  IconNav, ConvList, ChatWindow, RightPanel, ContactsView, ProfileView, ChatToast
+  IconNav, ConvList, ChatWindow, RightPanel, ContactsView, ProfileView, ChatToast, RichConfirmModal
 } from "../ui";
 
 // ── Skeleton loading screen ────────────────────────────────────────────────
@@ -96,6 +96,7 @@ export default function ChatApp() {
   const [mobilePanel, setMobilePanel] = useState("list");
   const [, startTransition] = useTransition();
   const [toast, setToast] = useState<{ name: string; text: string; avatar: string; color: string; convId: string } | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<any>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onNewMsg = useCallback((info: { name: string; text: string; avatar: string; color: string; convId: string }) => {
@@ -180,6 +181,8 @@ export default function ChatApp() {
         setToast(null);
       }} />
 
+      <RichConfirmModal config={confirmConfig} onClose={() => setConfirmConfig(null)} />
+
       <div style={{ display: "flex", height: viewportHeight, minHeight: "-webkit-fill-available", overflow: "hidden", fontFamily: "'Be Vietnam Pro',sans-serif" }}>
         {/* Desktop sidebar */}
         <div className="hide-on-mobile" style={{ height: "100%" }}>
@@ -219,13 +222,14 @@ export default function ChatApp() {
               conv={activeConv} msgs={msgs[activeId] || []} me={me} isLoadingMsgs={isLoadingMsgs}
               onSend={handleSend} onRecall={handleRecall} isMobile={isMobile} isTablet={isTablet}
               mobilePanel={mobilePanel} setMobilePanel={setMobilePanel}
+              onConfirmAction={setConfirmConfig}
             />
           </div>
 
           {/* Right panel */}
-          {!isMobile && !isTablet && <RightPanel conv={activeConv} me={me} chatUsers={chatUsers} isMobile={false} isTablet={false} onAddMember={handleAddMemberGroup} onUpdateGroup={handleUpdateGroup} onUpdateMemberRole={handleUpdateMemberRole} onRemoveMember={handleRemoveMember} />}
+          {!isMobile && !isTablet && <RightPanel conv={activeConv} me={me} chatUsers={chatUsers} isMobile={false} isTablet={false} onAddMember={handleAddMemberGroup} onUpdateGroup={handleUpdateGroup} onUpdateMemberRole={handleUpdateMemberRole} onRemoveMember={handleRemoveMember} onConfirmAction={setConfirmConfig} />}
           {(isMobile || isTablet) && mobilePanel === "info" && (
-            <RightPanel conv={activeConv} me={me} chatUsers={chatUsers} isMobile={isMobile} isTablet={isTablet} onClose={() => setMobilePanel("chat")} onAddMember={handleAddMemberGroup} onUpdateGroup={handleUpdateGroup} onUpdateMemberRole={handleUpdateMemberRole} onRemoveMember={handleRemoveMember} />
+            <RightPanel conv={activeConv} me={me} chatUsers={chatUsers} isMobile={isMobile} isTablet={isTablet} onClose={() => setMobilePanel("chat")} onAddMember={handleAddMemberGroup} onUpdateGroup={handleUpdateGroup} onUpdateMemberRole={handleUpdateMemberRole} onRemoveMember={handleRemoveMember} onConfirmAction={setConfirmConfig} />
           )}
         </>}
 

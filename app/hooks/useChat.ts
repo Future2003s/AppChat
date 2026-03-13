@@ -30,7 +30,16 @@ export function useChat(me: IUser | null, onNewMsg?: (info: { name: string; text
     try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
   });
   const [msgs, setMsgs] = useState<Record<string, IMessage[]>>({});
-  const [activeId, setActiveIdRaw] = useState<string | null>(null);
+  
+  // Initialize from hash if available
+  const [activeId, setActiveIdRaw] = useState<string | null>(() => {
+    if (typeof window !== "undefined" && window.location.hash) {
+      const hashId = window.location.hash.replace("#", "");
+      if (hashId) return hashId;
+    }
+    return null;
+  });
+
   const [chatUsers, setChatUsers] = useState<IUser[]>(() => {
     if (typeof window === "undefined" || !myId) return [];
     try { return JSON.parse(localStorage.getItem(`chat_users_${myId}`) || "[]"); } catch { return []; }
@@ -174,7 +183,7 @@ export function useChat(me: IUser | null, onNewMsg?: (info: { name: string; text
         return {
           ...prev,
           [conversationId]: existing.map(m =>
-            m._id === messageId ? { ...m, recalled: true, text: undefined, images: [], file: undefined } : m
+            m._id === messageId ? { ...m, recalled: true, text: "", images: [], file: undefined } : m
           )
         };
       });
@@ -195,6 +204,39 @@ export function useChat(me: IUser | null, onNewMsg?: (info: { name: string; text
     }).catch(console.error);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
+
+  // ─── URL Hash Sync ───────────────────────────────────────────────────────
+  // 1. Sync State to URL whenever activeId changes
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeId) {
+      // Use replaceState to avoid cluttering history
+      if (window.location.hash !== `#${activeId}`) {
+        window.history.replaceState(null, "", `#${activeId}`);
+      }
+    } else {
+      // Clear hash if activeId is null
+      if (window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }
+  }, [activeId]);
+
+  // 2. Listen to Hash changes (e.g., user pastes a link or hits back/forward)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleHashChange = () => {
+      const hashId = window.location.hash.replace("#", "");
+      if (hashId && hashId !== activeIdRef.current) {
+        setActiveId(hashId);
+      } else if (!hashId && activeIdRef.current) {
+        setActiveId(null);
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Conversation change: join room, mark read, load messages ────────────
   const setActiveId = useCallback((id: string | null) => {
@@ -375,20 +417,29 @@ export function useChat(me: IUser | null, onNewMsg?: (info: { name: string; text
       return {
         ...prev,
         [convId]: existing.map(m =>
-          m._id === messageId ? { ...m, recalled: true, text: undefined, images: [], file: undefined } : m
+          m._id === messageId 
+            ? { ...m, recalled: true, text: "", images: [], file: undefined } 
+            : m
         )
       };
     });
+    
     try {
       await api.recallMessage(messageId);
     } catch (err: any) {
       // Roll back on failure
       console.error("Recall error:", err);
       alert(err.message || "Lỗi thu hồi tin nhắn");
-      // Reload messages to restore
-      api.getMessages(convId).then(res => {
-        if (res.messages) setMsgs(prev => ({ ...prev, [convId]: res.messages }));
-      }).catch(() => {});
+      
+      // Reload messages to restore correct state
+      try {
+        const res = await api.getMessages(convId);
+        if (res.data?.messages) {
+          setMsgs(prev => ({ ...prev, [convId]: res.data.messages }));
+        }
+      } catch (loadErr) {
+        console.error("Failed to reload messages after recall failure:", loadErr);
+      }
     }
   }, []);
 

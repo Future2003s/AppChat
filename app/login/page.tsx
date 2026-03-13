@@ -13,6 +13,15 @@ export default function LoginPage() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const token = localStorage.getItem("chat_token");
+            if (token) {
+                router.replace("/");
+            }
+        }
+    }, [router]);
+
     const handleLogin = async (e: any) => {
         e.preventDefault();
         setError("");
